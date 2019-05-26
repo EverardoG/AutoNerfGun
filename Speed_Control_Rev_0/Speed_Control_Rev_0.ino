@@ -8,17 +8,17 @@ Adafruit_DCMotor *m3 = AFMS.getMotor(3);
 #define ENCODER_OPTIMIZE_INTERRUPTS
 #include <Encoder.h>
 Encoder e3(2, 4); // set encoder pins
-const int conv = 420 * 2; // pulses per revolution - avg can reach up to 58.94
+const int conv = 745; // pulses per revolution - avg can reach up to 58.94
 
 // PID set up
 #include <PID_v1.h>
 double Setvel, Input, Output;
-double Kp = 40, Ki = 20, Kd = 2; //40,20,2 work well
+double Kp = 10, Ki = 30, Kd = 3; //40,20,2 work well, also 10,30, 3
 PID PID3(&Input, &Output, &Setvel, Kp, Ki, Kd, DIRECT);
 
 // LCD screen set up
 #include <LiquidCrystal.h>
-LiquidCrystal lcd(12,11,8,7,9,10);
+LiquidCrystal lcd(12, 11, 8, 7, 9, 10);
 
 // velocity measurement set up
 long newPos; // position of motor
@@ -36,6 +36,8 @@ int oldLoopTime = 0;
 int controlLoopInterval = 100; // run at 10 Hz
 boolean realTimeRun = true;
 int eStopPin = 13;
+int inputPin = A0;
+int inputVal = 0;
 
 void setup() {
   // put your setup code here, to run once:
@@ -53,9 +55,9 @@ void setup() {
   pinMode(eStopPin, INPUT_PULLUP);
 
   //lcd set up
-  lcd.begin(16,2);
+  lcd.begin(16, 2);
   lcd.print("Motor Velocity:");
-  lcd.setCursor(0,1);
+  lcd.setCursor(0, 1);
 }
 
 void loop() {
@@ -64,7 +66,9 @@ void loop() {
   if (!realTimeRun) {
     while (!realTimeRun) {
       if (!digitalRead(eStopPin)) {
-        while (!digitalRead(eStopPin)){delay(1);}
+        while (!digitalRead(eStopPin)) {
+          delay(1);
+        }
         realTimeRun = true;
         Serial.println("RESTARTING");
         break;
@@ -76,7 +80,9 @@ void loop() {
     // check e stop and stop if hit
     if (!digitalRead(eStopPin)) {
       setVelocity(m3, 0);
-      while (!digitalRead(eStopPin)){delay(1);}
+      while (!digitalRead(eStopPin)) {
+        delay(1);
+      }
       realTimeRun = false;
       Serial.println("ESTOP TRIGGERED - HIT AGAIN TO RESTART");
       break;
@@ -90,6 +96,10 @@ void loop() {
       // SENSE
       // encoder reading
       long pos = e3.read();
+
+      // speed input reading
+      inputVal = analogRead(inputPin);
+
 
       // velocity calculations
       oldTime = newTime;
@@ -106,7 +116,7 @@ void loop() {
       Serial.print(" | Velocity Rev/s: "); Serial.println(vel_rs);
 
       // THINK
-      Setvel = 6.5; // revs per sec
+      Setvel = remapVal(inputVal); // revs per sec
       Input = vel_rs;
       //    int Output2 = Kp * (Setvel - vel_rs);
       PID3.Compute();
@@ -115,13 +125,21 @@ void loop() {
       setVelocity(m3, Output);
       lcd.clear();
       lcd.print("Motor Velocity:");
-      lcd.setCursor(0,1);
-      lcd.print(vel_rs);
-      lcd.setCursor(5,1);
+      lcd.setCursor(0, 1);
+      lcd.print(Setvel);
+      lcd.setCursor(5, 1);
       lcd.print("rev/s");
-      //  setVelocity(m3, 255);
+      //      setVelocity(m3, 50);
     }
   }
+}
+
+double remapVal(int sensorVal) {
+  // sensorVal - input sensor value from potentiometer
+  // remaps sensor value from potentiometer to a velocity
+  double newVal = 8.00 * ((double) sensorVal - 70.0) / 930.0;
+  return newVal;
+
 }
 
 void setVelocity(Adafruit_DCMotor *motor, int vel) {
